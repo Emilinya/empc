@@ -42,7 +42,10 @@ fn Path(directory: Signal<String>) -> Element {
 }
 
 #[component]
-fn Content(directory: Signal<String>, files_resource: Resource<ServerFnResult<Vec<DirEntry>>>) -> Element {
+fn Content(
+    directory: Signal<String>,
+    files_resource: Resource<ServerFnResult<Vec<DirEntry>>>,
+) -> Element {
     rsx! {
         div { id: "content" }
         match &*files_resource.value().read_unchecked() {

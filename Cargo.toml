@@ -10,10 +10,19 @@ edition = "2021"
 dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
 tokio = { version = "1", features = ["full"], optional = true }
 serde = "1.0.228"
+anyhow = "1.0.100"
+futures = { version = "0.3.31", default-features = false, features = ["std", "alloc", "async-await"] }
+axum = { version = "0.8.7", optional = true }
+jpeg-encoder = { version = "0.6.1", features = ["std", "simd"], optional = true }
 
 [features]
-default = ["web"]
+default = ["web", "server"]
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-server = ["dioxus/server", "dep:tokio"]
+server = ["dioxus/server", "dep:tokio", "dep:ashpd", "dep:pipewire", "dep:dirs", "dep:axum", "dep:jpeg-encoder"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { git = "https://github.com/bilelmoussaoui/ashpd.git", rev = "ca946925db0826bd598db92661cd0814a49856c9", optional = true }
+pipewire = { version = "0.9.2", optional = true }
+dirs = { version = "6.0.0", optional = true }

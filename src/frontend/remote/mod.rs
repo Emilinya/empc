@@ -5,7 +5,7 @@ pub fn Remote() -> Element {
     rsx! {
         div { id: "content",
             div { id: "screen",
-                img { id: "screen-img", src: "screenshot" }
+                img { id: "screen-img", src: "/api/remote/screencast" }
                 img { id: "screen-cursor", src: "cursor.png" }
             }
             div { id: "controls",
