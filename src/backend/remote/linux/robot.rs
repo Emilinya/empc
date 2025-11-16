@@ -1,7 +1,9 @@
+#![expect(dead_code)]
+
 use std::{
     io,
     os::fd::OwnedFd,
-    sync::mpsc::{Receiver, Sender},
+    sync::mpsc,
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -9,18 +11,15 @@ use std::{
 use ashpd::desktop::{
     remote_desktop::{DeviceType, KeyState, RemoteDesktop, SelectedDevices},
     screencast::{CursorMode, Screencast, SourceType, Stream},
-    PersistMode,
-    Session,
+    PersistMode, Session,
 };
 
 use pipewire as pw;
 use pw::{properties::properties, spa};
 use spa::param::video::VideoInfoRaw;
 
-use tokio::io::AsyncWriteExt;
 use tokio::fs;
-
-use std::sync::mpsc::channel;
+use tokio::io::AsyncWriteExt;
 
 pub struct Robot {
     session: Session<'static, RemoteDesktop>,
@@ -37,16 +36,10 @@ pub struct Frame {
     pub stride: u32,
 }
 
-async fn press_key(
-    proxy: &RemoteDesktop,
-    session: &Session<'static, RemoteDesktop>,
-    sym: i32,
-) {
-    let res = proxy.notify_keyboard_keysym(
-        &session,
-        sym,
-        KeyState::Pressed,
-    ).await;
+async fn press_key(proxy: &RemoteDesktop, session: &Session<'static, RemoteDesktop>, sym: i32) {
+    let res = proxy
+        .notify_keyboard_keysym(&session, sym, KeyState::Pressed)
+        .await;
     if let Err(err) = res {
         println!("Failed to press key: {}", err);
         return;
@@ -54,11 +47,9 @@ async fn press_key(
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 
-    let res = proxy.notify_keyboard_keysym(
-        &session,
-        sym,
-        KeyState::Released,
-    ).await;
+    let res = proxy
+        .notify_keyboard_keysym(&session, sym, KeyState::Released)
+        .await;
     if let Err(err) = res {
         println!("Failed to release key: {}", err);
         return;
@@ -68,7 +59,7 @@ async fn press_key(
 fn streaming_thread(
     fd: OwnedFd,
     stream: Stream,
-    tx: Sender<Frame>,
+    tx: mpsc::SyncSender<Frame>,
 ) -> anyhow::Result<()> {
     let node_id = stream.pipe_wire_node_id();
 
@@ -134,22 +125,21 @@ fn streaming_thread(
 
             // prepare to render video of this size
         })
-        .process(move |stream, format_data| {
-            match stream.dequeue_buffer() {
-                None => println!("out of buffers"),
-                Some(mut buffer) => {
-                    let datas = buffer.datas_mut();
-                    let data = &mut datas[0];
-                    let Some(slice) = data.data() else {
-                        return;
-                    };
+        .process(move |stream, format_data| match stream.dequeue_buffer() {
+            None => println!("out of buffers"),
+            Some(mut buffer) => {
+                let datas = buffer.datas_mut();
+                let data = &mut datas[0];
+                let Some(slice) = data.data() else {
+                    return;
+                };
 
-                    tx.send(Frame {
-                        format: format_data.clone(),
-                        buffer: Vec::from(slice),
-                        stride: data.chunk().stride() as u32,
-                    });
-                }
+                tx.send(Frame {
+                    format: format_data.clone(),
+                    buffer: Vec::from(slice),
+                    stride: data.chunk().stride() as u32,
+                })
+                .expect("TODO: implement proper stream teardown");
             }
         })
         .register()?;
@@ -250,12 +240,14 @@ impl Robot {
 
         let rd_proxy_1 = RemoteDesktop::new().await?;
         let rd_session_1 = rd_proxy_1.create_session().await?;
-        rd_proxy_1.select_devices(
-            &rd_session_1,
-            DeviceType::Keyboard | DeviceType::Pointer,
-            restore_token.as_deref(),
-            PersistMode::ExplicitlyRevoked,
-        ).await?;
+        rd_proxy_1
+            .select_devices(
+                &rd_session_1,
+                DeviceType::Keyboard | DeviceType::Pointer,
+                restore_token.as_deref(),
+                PersistMode::ExplicitlyRevoked,
+            )
+            .await?;
 
         let response_1 = rd_proxy_1.start(&rd_session_1, None).await?.response()?;
 
@@ -268,22 +260,26 @@ impl Robot {
 
         let rd_proxy = RemoteDesktop::new().await?;
         let session = rd_proxy.create_session().await?;
-        rd_proxy.select_devices(
-            &session,
-            DeviceType::Keyboard | DeviceType::Pointer,
-            None,
-            PersistMode::DoNot,
-        ).await?;
+        rd_proxy
+            .select_devices(
+                &session,
+                DeviceType::Keyboard | DeviceType::Pointer,
+                None,
+                PersistMode::DoNot,
+            )
+            .await?;
 
         let sc_proxy = Screencast::new().await?;
-        sc_proxy.select_sources(
-            &session,
-            CursorMode::Embedded,
-            SourceType::Monitor.into(),
-            false, // multiple
-            None, // restore_token
-            PersistMode::DoNot,
-        ).await?;
+        sc_proxy
+            .select_sources(
+                &session,
+                CursorMode::Embedded,
+                SourceType::Monitor.into(),
+                false, // multiple
+                None,  // restore_token
+                PersistMode::DoNot,
+            )
+            .await?;
 
         // This is a hack to work around the fact that you're not supposed to
         // be able to persist the screencast permission...
@@ -330,13 +326,13 @@ impl Robot {
         })
     }
 
-    pub async fn start_streaming(&mut self) -> anyhow::Result<Receiver<Frame>> {
+    pub async fn start_streaming(&mut self) -> anyhow::Result<mpsc::Receiver<Frame>> {
         if self.streaming_thread.is_some() {
             return Err(anyhow::anyhow!("Already streaming"));
         }
 
         let fd = self.screencast.open_pipe_wire_remote(&self.session).await?;
-        let (tx, rx) = channel::<Frame>();
+        let (tx, rx) = mpsc::sync_channel::<Frame>(0);
 
         self.streaming_thread = Some(thread::spawn({
             let stream = self.stream.clone();
@@ -351,29 +347,22 @@ impl Robot {
     }
 
     pub async fn press_key(&self, sym: i32) -> anyhow::Result<()> {
-        self.remote.notify_keyboard_keysym(
-            &self.session,
-            sym,
-            KeyState::Pressed,
-        ).await?;
+        self.remote
+            .notify_keyboard_keysym(&self.session, sym, KeyState::Pressed)
+            .await?;
 
         tokio::time::sleep(Duration::from_millis(10)).await;
 
-        self.remote.notify_keyboard_keysym(
-            &self.session,
-            sym,
-            KeyState::Released,
-        ).await?;
+        self.remote
+            .notify_keyboard_keysym(&self.session, sym, KeyState::Released)
+            .await?;
         Ok(())
     }
 
     pub async fn move_mouse_absolute(&self, x: f64, y: f64) -> anyhow::Result<()> {
-        self.remote.notify_pointer_motion_absolute(
-            &self.session,
-            self.stream.pipe_wire_node_id(),
-            x,
-            y,
-        ).await?;
+        self.remote
+            .notify_pointer_motion_absolute(&self.session, self.stream.pipe_wire_node_id(), x, y)
+            .await?;
         Ok(())
     }
 }
