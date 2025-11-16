@@ -163,7 +163,7 @@ impl FromResponse for ScreencastResponse {
     }
 }
 
-pub async fn screencast() -> Result<ScreencastResponse> {
+pub async fn screencast() -> Result<ScreencastResponse, HttpError> {
     let rx = CONTEXT.super_receiver.resubscribe();
     Ok(ScreencastResponse(rx))
 }

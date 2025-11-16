@@ -12,6 +12,6 @@ pub use dummy as implementation;
 
 #[cfg(feature = "server")]
 #[get("/api/remote/screencast")]
-pub async fn screencast() -> Result<implementation::ScreencastResponse> {
+pub async fn screencast() -> Result<implementation::ScreencastResponse, HttpError> {
     implementation::screencast().await
 }
