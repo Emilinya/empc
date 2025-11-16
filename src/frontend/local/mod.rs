@@ -1,10 +1,21 @@
+use std::{cmp::Ordering, path::PathBuf};
+
 use dioxus::prelude::*;
 
-use crate::backend::{self, local::DirEntry};
+use crate::{
+    backend::{
+        self,
+        local::{DirEntry, FileType},
+    },
+    frontend::Route,
+};
 
 #[component]
-pub fn Local() -> Element {
-    let directory = use_signal(|| "/".to_owned());
+pub fn Local(mut directory: String) -> Element {
+    if directory.is_empty() {
+        directory = "/".to_owned();
+    }
+    let directory = use_signal(|| directory);
     let files = use_resource(move || backend::local::list_files(directory().to_owned()));
 
     rsx! {
@@ -15,107 +26,125 @@ pub fn Local() -> Element {
 
 #[component]
 fn Path(directory: Signal<String>) -> Element {
-    eprintln!("dir is {:?}", directory);
+    let directory_string = directory();
+
+    let paths: Vec<_> = directory_string
+        .bytes()
+        .enumerate()
+        .filter_map(|(index, byte)| {
+            if byte == b'/' {
+                Some(directory_string[..=index].to_owned())
+            } else {
+                None
+            }
+        })
+        .collect();
 
     rsx! {
         div { id: "path",
             span { class: "component",
                 a { href: "/", "exit" }
             }
+            for path in paths {
+                span { class: "component", ">" }
+                PathComponent { directory, path }
+            }
         }
     }
+}
 
-    // for (var i = 0; i < dir.length; ++i) {
-    //     if (dir[i] === "/") {
-    //         var part = dir.substr(0, i + 1);
-
-    //         var sep = document.createElement("span");
-    //         sep.className = "component";
-    //         sep.innerText = ">";
-
-    //         $$("#path").appendChild(sep);
-    //         $$("#path").appendChild(elPathComponent(part))
-
-    //         first = false
-    //     }
-    // }
+#[component]
+fn PathComponent(directory: Signal<String>, path: String) -> Element {
+    let name = path.split('/').nth_back(1).unwrap_or_default().to_owned();
+    rsx! {
+        span { class: "component",
+            Link {
+                class: "dir",
+                to: Route::Local {
+                    directory: path.clone(),
+                },
+                onclick: move |_| {
+                    directory.set(path.clone());
+                },
+                "{name}/"
+            }
+        }
+    }
 }
 
 #[component]
 fn Content(
     directory: Signal<String>,
-    files_resource: Resource<ServerFnResult<Vec<DirEntry>>>,
+    files_resource: Resource<Result<Vec<DirEntry>, HttpError>>,
 ) -> Element {
+    let result = files_resource.value().read_unchecked().cloned();
+
     rsx! {
         div { id: "content" }
-        match &*files_resource.value().read_unchecked() {
-            Some(Ok(files)) => rsx! {
-                p { "got files!" }
+        match result {
+            Some(Ok(dir_entries)) => rsx! {
+                FileList { directory, dir_entries }
             },
             Some(Err(err)) => rsx! {
-                p { "got error: {err}!" }
+                span { color: "red", "Got error: {err}!" }
             },
             None => rsx! {
-                p { "loading ..." }
+                p { "Loading ..." }
             },
         }
     }
-
-    // fileList(currdir, function(err, files) {
-    //     if (err)
-    //         return alert(err);
-    //
-    //     files.forEach(function(file) {
-    //         if (file.type !== "dir") return;
-    //         $$("#content").appendChild(elDir(file));
-    //     });
-    //     files.forEach(function(file) {
-    //         if (file.type !== "file") return;
-    //         $$("#content").appendChild(elFile(file));
-    //     });
-    // });
 }
 
-/*
-var currdir;
-
-function fileList(dir, cb) {
-    dir = encodeURIComponent(dir);
-    get("/local/files/"+dir, function(err, res) {
-        if (err)
-            return cb(err);
-
-        var obj = JSON.parse(res);
-        if (obj.err)
-            return cb(obj.err);
-
-        cb(null, obj);
+#[component]
+fn FileList(directory: Signal<String>, dir_entries: Vec<DirEntry>) -> Element {
+    // We want directories before files
+    dir_entries.sort_by(|a, b| {
+        if a == b {
+            Ordering::Equal
+        } else if matches!(a.file_type, FileType::Directory) {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        }
     });
-}
 
-function elPathComponent(path) {
-    var name;
-    if (path === "/") {
-        name = "/";
-    } else {
-        var arr = path.split("/");
-        var j = 1;
-        do {
-            name = arr[arr.length - j++];
-        } while (name == "");
-        name += "/";
+    rsx! {
+        for DirEntry { path , file_name , file_type } in dir_entries {
+            match file_type {
+                FileType::File => rsx! {
+                    File { file_name, file_path: path }
+                },
+                FileType::Directory => rsx! {
+                    Directory { directory, file_name, file_path: path }
+                },
+                FileType::Symlink | FileType::Unknown => rsx! {},
+            }
+        }
     }
-
-    var el = document.createElement("a");
-    el.href = "#"+path;
-    el.innerText = name;
-    var span = document.createElement("span");
-    span.className = "component";
-    span.appendChild(el);
-    return span;
 }
 
-function elFile(file) {
+#[component]
+fn Directory(directory: Signal<String>, file_name: String, file_path: PathBuf) -> Element {
+    let path = file_path.display().to_string().replace("\\", "/") + "/";
+    let path_clone = path.clone();
+    rsx! {
+        div { class: "entry",
+
+            Link {
+                class: "dir",
+                to: Route::Local { directory: path },
+                onclick: move |_| {
+                    directory.set(path_clone.clone());
+                },
+                "{file_name}/"
+            }
+        }
+    }
+}
+
+#[component]
+fn File(file_name: String, file_path: PathBuf) -> Element {
+    /*
     var form = document.createElement("form");
     form.className = "entry";
     form.action = "/local/play/"+
@@ -132,85 +161,11 @@ function elFile(file) {
     form.appendChild(el);
 
     return form;
-}
-
-function elDir(file) {
-    var el = document.createElement("a");
-    el.className = "dir";
-    el.innerText = file.name+"/";
-    el.href = "#"+currdir+file.name+"/";
-
-    var div = document.createElement("div");
-    div.className = "entry";
-    div.appendChild(el);
-    return div;
-}
-
-function createPath(dir) {
-    console.log("dir is", dir);
-    $$("#path").innerHTML = "";
-
-    var exitBtn = document.createElement("span");
-    exitBtn.className = "component";
-    var exitBtnA = document.createElement("a");
-    exitBtnA.innerText = "exit";
-    exitBtnA.href = "/";
-    exitBtn.appendChild(exitBtnA);
-    $$("#path").appendChild(exitBtn);
-
-    for (var i = 0; i < dir.length; ++i) {
-        if (dir[i] === "/") {
-            var part = dir.substr(0, i + 1);
-
-            var sep = document.createElement("span");
-            sep.className = "component";
-            sep.innerText = ">";
-
-            $$("#path").appendChild(sep);
-            $$("#path").appendChild(elPathComponent(part))
-
-            first = false
+    */
+    rsx! {
+        form { class: "entry", method: "post",
+            // action: "/local/play/"+ encodeURIComponent(location.href)+"/"+ encodeURIComponent(file.path);
+            a { class: "file", "{file_name}" }
         }
     }
 }
-
-var changingHash = false;
-function listDir(dir, changehash) {
-    currdir = dir;
-    if (changehash) {
-        changingHash = true;
-        location.hash = dir;
-    }
-
-    createPath(dir);
-
-    $$("#content").innerHTML = "";
-    fileList(currdir, function(err, files) {
-        if (err)
-            return alert(err);
-
-        files.forEach(function(file) {
-            if (file.type !== "dir") return;
-            $$("#content").appendChild(elDir(file));
-        });
-        files.forEach(function(file) {
-            if (file.type !== "file") return;
-            $$("#content").appendChild(elFile(file));
-        });
-    });
-}
-
-if (location.hash) {
-    listDir(location.hash.substr(1));
-} else {
-    listDir("/", true);
-}
-
-window.addEventListener("hashchange", function() {
-    if (changingHash)
-        return changingHash = false;
-
-    listDir(location.hash.substr(1));
-});
-
-*/

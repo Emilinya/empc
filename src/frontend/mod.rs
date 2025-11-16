@@ -30,8 +30,8 @@ enum Route {
     Playback {},
     #[route("/remote")]
     Remote {},
-    #[route("/local")]
-    Local {},
+    #[route("/local?:directory")]
+    Local { directory: String },
 }
 
 #[component]
