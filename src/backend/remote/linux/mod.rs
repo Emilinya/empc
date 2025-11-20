@@ -1,8 +1,10 @@
+mod key;
 mod robot;
 
 use dioxus::{
     fullstack::{response::IntoResponse, ClientResponse, FromResponse},
     prelude::*,
+    server::Bytes,
 };
 use jpeg_encoder::ColorType;
 use pipewire::spa::param::video::VideoFormat;
@@ -21,17 +23,19 @@ use tokio::{sync::broadcast, time::sleep};
 #[derive(Clone)]
 struct JpegFrame(Arc<Vec<u8>>);
 
-impl From<JpegFrame> for dioxus_server::Bytes {
+impl From<JpegFrame> for Bytes {
     fn from(value: JpegFrame) -> Self {
         let len = value.0.len();
-        let mut bytes = Vec::<u8>::new();
-        bytes.reserve(len + 100);
-        write!(&mut bytes, "--EMPC_FRAME_BOUNDARY\r\n").expect("write should never fail");
-        write!(&mut bytes, "Content-Type: image/jpeg\r\n").expect("write should never fail");
-        write!(&mut bytes, "Content-Length: {len}\r\n").expect("write should never fail");
-        write!(&mut bytes, "\r\n").expect("write should never fail");
+        let mut bytes = Vec::with_capacity(len + 100);
+
+        // Ignore errors as write can't actually fail
+        let _ = write!(&mut bytes, "--EMPC_FRAME_BOUNDARY\r\n");
+        let _ = write!(&mut bytes, "Content-Type: image/jpeg\r\n");
+        let _ = write!(&mut bytes, "Content-Length: {len}\r\n");
+        let _ = write!(&mut bytes, "\r\n");
+
         bytes.extend_from_slice(&value.0);
-        dioxus_server::Bytes::from(bytes)
+        Bytes::from(bytes)
     }
 }
 
@@ -115,7 +119,7 @@ impl Context {
     }
 }
 
-static CONTEXT: LazyLock<Context> = LazyLock::new(|| Context::new());
+static CONTEXT: LazyLock<Context> = LazyLock::new(Context::new);
 
 struct JpegStream(broadcast::Receiver<JpegFrame>);
 
@@ -156,10 +160,8 @@ impl IntoResponse for ScreencastResponse {
 }
 
 impl FromResponse for ScreencastResponse {
-    fn from_response(_res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
-        async {
-            panic!("FromResponse is not to be used directly from client code");
-        }
+    async fn from_response(_res: ClientResponse) -> Result<Self, ServerFnError> {
+        panic!("FromResponse is not to be used directly from client code");
     }
 }
 
