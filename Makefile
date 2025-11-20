@@ -9,7 +9,8 @@ format:
 
 .PHONY: check
 check:
-	cargo clippy
+	cargo clippy -- -D warnings
+	cargo clippy -F server -- -D warnings
 
 .PHONY: ci
 ci:

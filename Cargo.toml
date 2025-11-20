@@ -3,6 +3,7 @@ name = "empc"
 version = "0.1.0"
 authors = ["Emilie <emilid2103@gmail.com>"]
 edition = "2021"
+rust-version = "1.91.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,7 +17,7 @@ axum = { version = "0.8.7", optional = true }
 jpeg-encoder = { version = "0.6.1", features = ["std", "simd"], optional = true }
 
 [features]
-default = ["web", "server"]
+default = ["web"]
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]

@@ -7,17 +7,23 @@ env:
 
 jobs:
   build:
-    runs-on: [ubuntu-latest, windows-latest, macos-latest]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
     - uses: Swatinem/rust-cache@v2
+    - if: ${{ matrix.os == 'ubuntu-latest' }}
+      uses: awalsh128/cache-apt-pkgs-action@v1
+      with:
+        packages: libpipewire-0.3-dev
+        version: latest
     - name: Download dx
-      run: curl -sSL http://dioxus.dev/install.sh | sh
+      run: curl -sSL http://dioxus.dev/install.sh | bash
     - name: Format
-      run: cargo fmt
-      run: dx fmt
-      run: git diff --exit-code
-    - name: Build
-      run: dx bundle
+      run: |
+        make format
+        git diff --exit-code
     - name: Lint
-      run: cargo clippy
+      run: make check

@@ -1,3 +1,4 @@
+#[cfg(feature = "server")]
 use dioxus::prelude::*;
 
 #[cfg(all(target_os = "linux", feature = "server"))]
