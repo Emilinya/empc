@@ -2,8 +2,8 @@ use std::{fmt::Display, time::Duration};
 
 use anyhow::Context;
 use ashpd::desktop::{
-    remote_desktop::{KeyState, RemoteDesktop},
     Session,
+    remote_desktop::{KeyState, RemoteDesktop},
 };
 use tokio::time;
 

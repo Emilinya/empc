@@ -10,9 +10,9 @@ use std::{
 
 use anyhow::Context;
 use ashpd::desktop::{
+    PersistMode, Session,
     remote_desktop::{DeviceType, KeyState, RemoteDesktop, SelectedDevices},
     screencast::{CursorMode, Screencast, SourceType, Stream},
-    PersistMode, Session,
 };
 
 use pipewire as pw;
@@ -22,7 +22,7 @@ use spa::param::video::VideoInfoRaw;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
-use super::key::{press_key, press_key_with_modifiers, Key};
+use super::key::{Key, press_key, press_key_with_modifiers};
 
 pub struct Robot {
     session: Session<'static, RemoteDesktop>,
@@ -254,15 +254,15 @@ impl Robot {
             .response()
             .context("Failed to get remote desktop session response 1")?;
 
-        if restore_token.as_deref() != response_1.restore_token() {
-            if let Some(tok) = response_1.restore_token() {
-                let mut f = fs::File::create(&tok_file).await.with_context(|| {
-                    format!("Failed to create restore token file {:?}", tok_file)
-                })?;
-                f.write(tok.as_bytes()).await.with_context(|| {
-                    format!("Failed to write {:?} to tok file {:?}", tok, tok_file)
-                })?;
-            }
+        if restore_token.as_deref() != response_1.restore_token()
+            && let Some(tok) = response_1.restore_token()
+        {
+            let mut f = fs::File::create(&tok_file)
+                .await
+                .with_context(|| format!("Failed to create restore token file {:?}", tok_file))?;
+            f.write(tok.as_bytes())
+                .await
+                .with_context(|| format!("Failed to write {:?} to tok file {:?}", tok, tok_file))?;
         }
 
         let rd_proxy = RemoteDesktop::new()

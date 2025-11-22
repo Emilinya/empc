@@ -2,7 +2,7 @@ mod key;
 mod robot;
 
 use dioxus::{
-    fullstack::{response::IntoResponse, ClientResponse, FromResponse},
+    fullstack::{ClientResponse, FromResponse, response::IntoResponse},
     prelude::*,
     server::Bytes,
 };
