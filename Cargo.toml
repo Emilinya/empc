@@ -7,6 +7,7 @@ rust-version = "1.91.1"
 
 [dependencies]
 dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
+dioxus-fullstack = { version = "0.7.1", features = ["postcard"] }
 tokio = { version = "1", features = ["full"], optional = true }
 serde = "1.0.228"
 anyhow = "1.0.100"

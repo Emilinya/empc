@@ -1,6 +1,6 @@
-mod local;
-mod playback;
-mod remote;
+pub mod local;
+pub mod playback;
+pub mod remote;
 
 use {local::Local, playback::Playback, remote::Remote};
 
