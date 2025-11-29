@@ -58,6 +58,9 @@ pub fn Home() -> Element {
             form { class: "part", method: "get", action: "/local/",
                 button { class: "link", "Local Media" }
             }
+            form { class: "part", method: "get", action: "/api/shutdown/",
+                button { class: "link", "Power Off" }
+            }
         }
     }
 }
