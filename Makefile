@@ -1,6 +1,7 @@
 .PHONY: build
 build:
-	dx bundle
+	dx bundle --release
+	cp -r target/dx/empc/release/web .
 
 .PHONY: format
 format:
@@ -15,5 +16,4 @@ check:
 .PHONY: ci
 ci:
 	make format
-	make build
 	make check

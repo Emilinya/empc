@@ -1,8 +1,9 @@
 pub mod local;
 pub mod playback;
 pub mod remote;
+pub mod shutdown;
 
-use {local::Local, playback::Playback, remote::Remote};
+use {local::Local, playback::Playback, remote::Remote, shutdown::Shutdown};
 
 use dioxus::prelude::*;
 
@@ -32,6 +33,8 @@ enum Route {
     Remote {},
     #[route("/local?:directory")]
     Local { directory: String },
+    #[route("/shutdown")]
+    Shutdown {},
 }
 
 #[component]

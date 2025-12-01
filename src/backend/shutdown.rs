@@ -8,12 +8,15 @@ pub async fn shutdown() -> Result<Response> {
     // Redirect to empc.emilie.moe, which can be used to restart empc
     let response = Response::builder()
         .status(StatusCode::PERMANENT_REDIRECT)
-        .header(LOCATION, "http://empc.emilie.moe/")
+        .header(LOCATION, "/shutdown")
         .body(Body::empty())?;
 
     // Shut down in a separate task so we have enough time to redirect before powering off
     #[cfg(target_os = "linux")]
     tokio::spawn(async {
+        // Sleep a bit so we have enough time to redirect
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
         let mut handle = match tokio::process::Command::new("poweroff").spawn() {
             Ok(handle) => handle,
             Err(err) => {
